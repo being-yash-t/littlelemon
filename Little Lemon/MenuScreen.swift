@@ -16,11 +16,23 @@ struct MenuScreen: View {
     
     var body: some View {
         NavigationView {
-            VStack() {
-                FetchedObjects(
-                    predicate: buildPredicate(),
-                    sortDescriptors: buildSortDescriptors()
-                ) { (dishes: [Dish]) in
+            FetchedObjects(
+                predicate: buildPredicate(),
+                sortDescriptors: buildSortDescriptors()
+            ) { (dishes: [Dish]) in
+                VStack(alignment: .leading)  {
+                    Text("Little Lemon")
+                        .font(.title)
+                        .padding(.horizontal)
+                    Text("NY")
+                        .font(.subheadline)
+                        .padding(.horizontal)
+                    Text("View all the dishes available & order from the app")
+                        .font(.caption)
+                        .padding(.horizontal)
+                    
+                    SearchBar(text: $searchText)
+                    
                     List {
                         ForEach(dishes) { dish in
                             HStack {
@@ -35,19 +47,11 @@ struct MenuScreen: View {
                                 Text(dish.price!)
                             }
                         }
-                    }
-                    .searchable(text: $searchText, prompt: "Search menu")
-                }
-                .onAppear { getMenuData() }
-                .toolbar {
-                    ToolbarItem(placement: .principal) {
-                        VStack(spacing: 0) {
-                            Text("Little Lemon").font(.title)
-                            Text("Nashik").font(.subheadline)
-                        }.safeAreaPadding(.top)
-                    }
+                    }.safeAreaPadding(.top, 0)
                 }
             }
+            .navigationBarTitleDisplayMode(.large)
+            .onAppear { getMenuData() }
         }
     }
     
@@ -59,19 +63,27 @@ struct MenuScreen: View {
         searchText.isEmpty ? NSPredicate(value: true) : NSPredicate(format: "title CONTAINS[cd] %@", searchText)
     }
     
-    func getMenuData() {
+    private func clearDatabase() {
+        let fetchRequest: NSFetchRequest<NSFetchRequestResult> = NSFetchRequest(entityName: "Dish")
+        let deleteRequest = NSBatchDeleteRequest(fetchRequest: fetchRequest)
+        deleteRequest.resultType = .resultTypeObjectIDs
+        let deleteResult = try! viewContext.execute(deleteRequest) as! NSBatchDeleteResult
+        /// Sync changes to memory
+        let changes: [AnyHashable: Any] = [
+            NSDeletedObjectsKey: deleteResult.result as! [NSManagedObjectID]
+        ]
+        NSManagedObjectContext.mergeChanges(fromRemoteContextSave: changes, into: [viewContext])
+    }
+    
+    private func getMenuData() {
+        clearDatabase()
+        
         let url = URL(string: "https://raw.githubusercontent.com/Meta-Mobile-Developer-PC/Working-With-Data-API/main/menu.json")!
         let request = URLRequest(url: url)
         URLSession.shared.dataTask(with: request) { data, _, error in
             if let data = data {
                 do {
-                    let fetchRequest: NSFetchRequest<NSFetchRequestResult> = NSFetchRequest(entityName: "Dish")
-                    let deleteRequest = NSBatchDeleteRequest(fetchRequest: fetchRequest)
-                    let deleteResult = try? viewContext.execute(deleteRequest)
-                    print(String(describing: deleteResult!.debugDescription))
-                    
                     let menuList = try JSONDecoder().decode(MenuList.self, from: Data(data))
-                    
                     menuList.menu.forEach({ item in
                         let dish = Dish(context: viewContext)
                         dish.title = item.title
@@ -88,7 +100,51 @@ struct MenuScreen: View {
                 print("API Failed: \(errorDescription)")
             }
         }.resume()
-        
+    }
+}
+
+struct SearchBar: View {
+    @Binding var text: String
+    @State private var showCancelButton = false
+    @State var showClear = false
+    @FocusState private var focusedField: Bool
+    
+    var body: some View {
+        HStack {
+            HStack {
+                Image(systemName: "magnifyingglass").foregroundColor(.secondary)
+                TextField("Search...", text: $text, onEditingChanged: { isEditing in
+                    withAnimation { showCancelButton = isEditing }
+                })
+                .focused($focusedField)
+                .onChange(of: text) {
+                    withAnimation {
+                        showClear = text.isEmpty ? false : true
+                    }
+                }
+                if showClear {
+                    Button(action: { text = "" }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Color(.systemGroupedBackground))
+            .cornerRadius(8)
+            
+            if showCancelButton {
+                Button("Cancel") {
+                    withAnimation {
+                        text = ""
+                        showCancelButton = false
+                        focusedField = false
+                    }
+                }
+                .padding(.leading, 4)
+            }
+        }.padding(.horizontal)
     }
 }
 

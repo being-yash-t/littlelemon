@@ -41,13 +41,13 @@ struct UserProfile: View {
             } else {
                 Text("No User :(")
             }
-            Spacer()
             if email != nil {
                 Button("Logout") {
                     authViewModel.signOut()
                     dismiss()
                 }
             }
+            Spacer()
         }
         .onAppear { loadData() }
         .navigationTitle("Personal Information")
